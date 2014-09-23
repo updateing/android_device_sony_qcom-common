@@ -53,10 +53,16 @@ static char KEY_SONY_FOCUS_AREA_VALUES[] = "sony-focus-area-values";
 static char VALUE_SONY_ON[] = "on";
 static char VALUE_SONY_OFF[] = "off";
 static char VALUE_SONY_STILL_HDR[] = "on-still-hdr";
+static char VALUE_SONY_AUTO_EXPOSURE_SPOT[] = "spot";
 
 // QCOM parameter names
 static char KEY_ISO_MODE[] = "iso";
 static char KEY_SUPPORTED_ISO_MODES[] = "iso-values";
+static char KEY_AUTO_EXPOSURE[] = "auto-exposure";
+static char KEY_SUPPORTED_AUTO_EXPOSURE[] = "auto-exposure-values";
+
+// QCOM parameter values
+static char VALUE_AUTO_EXPOSURE_SPOT_METERING[] = "spot-metering";
 
 static android::Mutex gCameraWrapperLock;
 static camera_module_t *gVendorModule = 0;
@@ -169,15 +175,15 @@ static char *camera_fixup_getparams(int id, const char *settings)
         char buffer[255] = "";
         strcpy(buffer, meteringModeList);
 
-        char* spotPtr = strstr(meteringModeList, "spot");
+        char* spotPtr = strstr(meteringModeList, VALUE_SONY_AUTO_EXPOSURE_SPOT);
         if (spotPtr != NULL) {
             char spotLoc = spotPtr - meteringModeList;
             buffer[spotLoc] = 0;
-            strcat(buffer, "spot-metering");
+            strcat(buffer, VALUE_AUTO_EXPOSURE_SPOT_METERING);
             strcat(buffer, spotPtr + 4);
         }
 
-        params.set(android::CameraParameters::KEY_SUPPORTED_AUTO_EXPOSURE, buffer);
+        params.set(KEY_SUPPORTED_AUTO_EXPOSURE, buffer);
     }
 
     if (params.get(KEY_SONY_IMAGE_STABILISER)) {
@@ -229,10 +235,10 @@ static char *camera_fixup_getparams(int id, const char *settings)
 
     if (params.get(KEY_SONY_METERING_MODE) && params.get(KEY_SONY_METERING_MODE_VALUES)) {
         const char* meteringMode = params.get(KEY_SONY_METERING_MODE);
-        if (strcmp(meteringMode, "spot") == 0) {
-            params.set(android::CameraParameters::KEY_AUTO_EXPOSURE, "spot-metering");
+        if (strcmp(meteringMode, VALUE_SONY_AUTO_EXPOSURE_SPOT) == 0) {
+            params.set(KEY_AUTO_EXPOSURE, VALUE_AUTO_EXPOSURE_SPOT_METERING);
         } else {
-            params.set(android::CameraParameters::KEY_AUTO_EXPOSURE, meteringMode);
+            params.set(KEY_AUTO_EXPOSURE, meteringMode);
         }
     }
 
@@ -316,11 +322,11 @@ static char *camera_fixup_setparams(int id, const char *settings)
         }
     }
 
-    if (params.get(android::CameraParameters::KEY_AUTO_EXPOSURE) && params.get(KEY_SONY_METERING_MODE)) {
-       if (strcmp(params.get(android::CameraParameters::KEY_AUTO_EXPOSURE), "spot-metering") == 0) {
-           params.set(KEY_SONY_METERING_MODE, "spot");
+    if (params.get(KEY_AUTO_EXPOSURE) && params.get(KEY_SONY_METERING_MODE)) {
+       if (strcmp(params.get(KEY_AUTO_EXPOSURE), VALUE_AUTO_EXPOSURE_SPOT_METERING) == 0) {
+           params.set(KEY_SONY_METERING_MODE, VALUE_SONY_AUTO_EXPOSURE_SPOT);
        } else {
-           params.set(KEY_SONY_METERING_MODE, params.get(android::CameraParameters::KEY_AUTO_EXPOSURE));
+           params.set(KEY_SONY_METERING_MODE, params.get(KEY_AUTO_EXPOSURE));
        }
     }
 
