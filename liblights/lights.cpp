@@ -15,8 +15,8 @@
  */
 
 
-#define LOG_NDEBUG 0
-#define LOG_PARAM
+//#define LOG_NDEBUG 0
+//#define LOG_PARAM
 //#define LOG_BRIGHTNESS
 #define LOG_TAG "Sony Lights HAL Opensource"
 
