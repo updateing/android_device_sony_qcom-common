@@ -2211,7 +2211,7 @@ static int responseStrings(Parcel &p, void *response, size_t responselen, bool n
 }
 
 /*
- * RIL_RADIO_TECHNOLOGY: 18 (QCOM HSPAP_DC) ==> 14 (LTE)
+ * RIL_RADIO_TECHNOLOGY: 18 (QCOM HSPAP_DC) ==> 30 (CM DCHSPAP)
  */
 static int responseStringsDataRegistrationState(Parcel &p, void *response, size_t responselen) {
 
@@ -2230,8 +2230,9 @@ static int responseStringsDataRegistrationState(Parcel &p, void *response, size_
     if (p_cur[3] != NULL) {
     	ALOGV("DATA_REGISTRATION_STATE: radioTechnology=%s", p_cur[3]);
         if (strncmp(p_cur[3], "18", 2) == 0) {
-            ALOGI("DATA_REGISTRATION_STATE: stock radioTechnology=19 (QCOM OLD HSPAP_DC/IWLAN) -> radioTechnology=14 (LTE)");
-            // There is no DC-HSPA+ implementation in CAF source(and what is IWLAN?). Use LTE to replace it.
+            // ALOGI("DATA_REGISTRATION_STATE: stock radioTechnology=18 (QCOM OLD HSPAP_DC/IWLAN) -> radioTechnology=30 (CM DCHSPAP)");
+            // For now there is no DC in CM...Use LTE instead. Some carriers do recognize DC as 4G....
+            ALOGI("DATA_REGISTRATION_STATE: stock radioTechnology=18 (QCOM OLD HSPAP_DC/IWLAN) -> radioTechnology=14 (LTE)");
 			strncpy(p_cur[3], "14", 2);
         }
     }
