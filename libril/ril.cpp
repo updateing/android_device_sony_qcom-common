@@ -280,10 +280,8 @@ static void dispatchDataProfile(Parcel &p, RequestInfo *pRI);
 static void dispatchNetworkManual (Parcel& p, RequestInfo *pRI);
 static int responseInts(Parcel &p, void *response, size_t responselen);
 static int responseStrings(Parcel &p, void *response, size_t responselen);
-static int responseStringsDataRegistrationState(Parcel &p, void *response, size_t responselen);
-static int responseStringsNetworks(Parcel &p, void *response, size_t responselen);
-static int responseStrings(Parcel &p, void *response, size_t responselen, bool network_search);
 static int responseString(Parcel &p, void *response, size_t responselen);
+static int responseStringsDataRegistrationState(Parcel &p, void *response, size_t responselen);
 static int responseVoid(Parcel &p, void *response, size_t responselen);
 static int responseCallList(Parcel &p, void *response, size_t responselen);
 static int responseSMS(Parcel &p, void *response, size_t responselen);
@@ -306,15 +304,11 @@ static int responseCdmaCallWaiting(Parcel &p,void *response, size_t responselen)
 static int responseSimRefresh(Parcel &p, void *response, size_t responselen);
 static int responseCellInfoList(Parcel &p, void *response, size_t responselen);
 static int responseHardwareConfig(Parcel &p, void *response, size_t responselen);
-static int responseSSData(Parcel &p, void *response, size_t responselen);
 static int responseDcRtInfo(Parcel &p, void *response, size_t responselen);
-static int responseGetDataCallProfile(Parcel &p, void *response, size_t responselen);
 
 static int decodeVoiceRadioTechnology (RIL_RadioState radioState);
 static int decodeCdmaSubscriptionSource (RIL_RadioState radioState);
 static RIL_RadioState processRadioState(RIL_RadioState newRadioState);
-
-static bool isServiceTypeCfQuery(RIL_SsServiceType serType, RIL_SsRequestType reqType);
 
 #ifdef RIL_SHLIB
 #if defined(ANDROID_MULTI_SIM)
@@ -871,7 +865,6 @@ invalid:
 /**
  * Callee expects const RIL_SIM_IO *
  * Payload is:
- *   int32_t cla
  *   int32_t command
  *   int32_t fileid
  *   String path
@@ -894,15 +887,6 @@ dispatchSIM_IO (Parcel &p, RequestInfo *pRI) {
     memset (&simIO, 0, sizeof(simIO));
 
     // note we only check status at the end
-
-#ifdef RIL_SUPPORTS_SEEK
-    simIO.v6.cla = 0;
-    if(pRI->pCI->requestNumber == RIL_REQUEST_SIM_TRANSMIT_APDU_BASIC ||
-            pRI->pCI->requestNumber == RIL_REQUEST_SIM_TRANSMIT_APDU_CHANNEL ) {
-        status = p.readInt32(&t);
-        simIO.v6.cla = (int)t;
-    }
-#endif
 
     status = p.readInt32(&t);
     simIO.v6.command = (int)t;
@@ -1548,7 +1532,6 @@ static void dispatchRilCdmaSmsWriteArgs(Parcel &p, RequestInfo *pRI) {
     uint8_t  uct;
     status_t status;
     int32_t  digitCount;
-    int32_t  digitLimit;
 
     memset(&rcsw, 0, sizeof(rcsw));
 
@@ -1579,9 +1562,7 @@ static void dispatchRilCdmaSmsWriteArgs(Parcel &p, RequestInfo *pRI) {
     status = p.read(&uct,sizeof(uct));
     rcsw.message.sAddress.number_of_digits = (uint8_t) uct;
 
-    digitLimit = MIN((rcsw.message.sAddress.number_of_digits), RIL_CDMA_SMS_ADDRESS_MAX);
-
-    for(digitCount = 0 ; digitCount < digitLimit; digitCount ++) {
+    for(digitCount = 0 ; digitCount < RIL_CDMA_SMS_ADDRESS_MAX; digitCount ++) {
         status = p.read(&uct,sizeof(uct));
         rcsw.message.sAddress.digits[digitCount] = (uint8_t) uct;
     }
@@ -1595,9 +1576,7 @@ static void dispatchRilCdmaSmsWriteArgs(Parcel &p, RequestInfo *pRI) {
     status = p.read(&uct,sizeof(uct));
     rcsw.message.sSubAddress.number_of_digits = (uint8_t) uct;
 
-    digitLimit = MIN((rcsw.message.sSubAddress.number_of_digits), RIL_CDMA_SMS_SUBADDRESS_MAX);
-
-    for(digitCount = 0 ; digitCount < digitLimit; digitCount ++) {
+    for(digitCount = 0 ; digitCount < RIL_CDMA_SMS_SUBADDRESS_MAX; digitCount ++) {
         status = p.read(&uct,sizeof(uct));
         rcsw.message.sSubAddress.digits[digitCount] = (uint8_t) uct;
     }
@@ -1605,9 +1584,7 @@ static void dispatchRilCdmaSmsWriteArgs(Parcel &p, RequestInfo *pRI) {
     status = p.readInt32(&t);
     rcsw.message.uBearerDataLen = (int) t;
 
-    digitLimit = MIN((rcsw.message.uBearerDataLen), RIL_CDMA_SMS_BEARER_DATA_MAX);
-
-    for(digitCount = 0 ; digitCount < digitLimit; digitCount ++) {
+    for(digitCount = 0 ; digitCount < RIL_CDMA_SMS_BEARER_DATA_MAX; digitCount ++) {
         status = p.read(&uct, sizeof(uct));
         rcsw.message.aBearerData[digitCount] = (uint8_t) uct;
     }
@@ -2151,15 +2128,6 @@ static int responseStringsWithVersion(int version, Parcel &p, void *response, si
 
 /** response is a char **, pointing to an array of char *'s */
 static int responseStrings(Parcel &p, void *response, size_t responselen) {
-    return responseStrings(p, response, responselen, false);
-}
-
-static int responseStringsNetworks(Parcel &p, void *response, size_t responselen) {
-    return responseStrings(p, response, responselen, true);
-}
-
-/** response is a char **, pointing to an array of char *'s */
-static int responseStrings(Parcel &p, void *response, size_t responselen, bool network_search) {
     int numStrings;
 
     if (response == NULL && responselen != 0) {
@@ -2178,29 +2146,11 @@ static int responseStrings(Parcel &p, void *response, size_t responselen, bool n
         char **p_cur = (char **) response;
 
         numStrings = responselen / sizeof(char *);
-#ifdef RIL_RESPONSE_5_ELEMENTS
-        if (network_search == true) {
-            // we only want four entries for each network
-            p.writeInt32 (numStrings - (numStrings / 5));
-        } else {
-            p.writeInt32 (numStrings);
-        }
-        int sCount = 0;
-#else
         p.writeInt32 (numStrings);
-#endif
 
         /* each string*/
         startResponse;
         for (int i = 0 ; i < numStrings ; i++) {
-#ifdef RIL_RESPONSE_5_ELEMENTS
-            sCount++;
-            // ignore the fifth string that is returned by newer QCOM libOEM_ril.so.
-            if (network_search == true && sCount % 5 == 0) {
-                sCount = 0;
-                continue;
-            }
-#endif
             appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
             writeStringToParcel (p, p_cur[i]);
         }
@@ -2211,7 +2161,7 @@ static int responseStrings(Parcel &p, void *response, size_t responselen, bool n
 }
 
 /*
- * RIL_RADIO_TECHNOLOGY: 18 (QCOM HSPAP_DC) ==> 30 (CM DCHSPAP)
+ * RIL_RADIO_TECHNOLOGY: 19 (QCOM HSPAP_DC) ==> 30 (CM DCHSPAP)
  */
 static int responseStringsDataRegistrationState(Parcel &p, void *response, size_t responselen) {
 
@@ -2228,12 +2178,14 @@ static int responseStringsDataRegistrationState(Parcel &p, void *response, size_
     char **p_cur = (char **) response;
 
     if (p_cur[3] != NULL) {
-    	ALOGV("DATA_REGISTRATION_STATE: radioTechnology=%s", p_cur[3]);
+#ifdef RIL_LEGACY_PAP
         if (strncmp(p_cur[3], "18", 2) == 0) {
-            // ALOGI("DATA_REGISTRATION_STATE: stock radioTechnology=18 (QCOM OLD HSPAP_DC/IWLAN) -> radioTechnology=30 (CM DCHSPAP)");
-            // For now there is no DC in CM...Use LTE instead. Some carriers do recognize DC as 4G....
-            ALOGI("DATA_REGISTRATION_STATE: stock radioTechnology=18 (QCOM OLD HSPAP_DC/IWLAN) -> radioTechnology=14 (LTE)");
-			strncpy(p_cur[3], "14", 2);
+            ALOGE("DATA_REGISTRATION_STATE: stock radioTechnology=18 (QCOM HSPAP_DC) -> CyanogenMod radioTechnology=30 (CM DCHSPAP)");
+#else
+        if (strncmp(p_cur[3], "19", 2) == 0) {
+            ALOGE("DATA_REGISTRATION_STATE: stock radioTechnology=19 (QCOM HSPAP_DC) -> CyanogenMod radioTechnology=30 (CM DCHSPAP)");
+#endif
+            strncpy(p_cur[3], "15", 2);
         }
     }
 
@@ -2457,8 +2409,8 @@ static int responseDataCallList(Parcel &p, void *response, size_t responselen)
             return RIL_ERRNO_INVALID_RESPONSE;
         }
 
-        // Support v6 only in ril version < 10
-        if (s_callbacks.version < 10) {
+        // Support v6 or v9 with new rils
+        if (responselen % sizeof(RIL_Data_Call_Response_v6) == 0) {
             RLOGD("responseDataCallList: v6");
             return responseDataCallListV6(p, response, responselen);
         }
@@ -2704,21 +2656,8 @@ static int responseCdmaInformationRecords(Parcel &p,
         infoRec = &p_cur->infoRec[i];
         p.writeInt32(infoRec->name);
         switch (infoRec->name) {
-            case RIL_CDMA_EXTENDED_DISPLAY_INFO_REC:
-                if (infoRec->rec.display.alpha_len >
-                                         CDMA_ALPHA_INFO_BUFFER_LENGTH) {
-                    RLOGE("invalid display info response length %d \
-                          expected not more than %d\n",
-                         (int)infoRec->rec.display.alpha_len,
-                         CDMA_ALPHA_INFO_BUFFER_LENGTH);
-                    return RIL_ERRNO_INVALID_RESPONSE;
-                }
-                // Write as a byteArray
-                p.writeInt32(infoRec->rec.display.alpha_len);
-                p.write(infoRec->rec.display.alpha_buf,
-                        infoRec->rec.display.alpha_len);
-                break;
             case RIL_CDMA_DISPLAY_INFO_REC:
+            case RIL_CDMA_EXTENDED_DISPLAY_INFO_REC:
                 if (infoRec->rec.display.alpha_len >
                                          CDMA_ALPHA_INFO_BUFFER_LENGTH) {
                     RLOGE("invalid display info response length %d \
@@ -3028,7 +2967,7 @@ static int responseSimRefresh(Parcel &p, void *response, size_t responselen) {
     }
 
     startResponse;
-    if (s_callbacks.version >= 7) {
+    if (s_callbacks.version == 7) {
         RIL_SimRefreshResponse_v7 *p_cur = ((RIL_SimRefreshResponse_v7 *) response);
         p.writeInt32(p_cur->result);
         p.writeInt32(p_cur->ef_id);
@@ -3255,83 +3194,6 @@ static int responseHardwareConfig(Parcel &p, void *response, size_t responselen)
    return 0;
 }
 
-static int responseSSData(Parcel &p, void *response, size_t responselen) {
-    RLOGD("In responseSSData");
-    int num;
-
-    if (response == NULL && responselen != 0) {
-        RLOGE("invalid response: NULL");
-        return RIL_ERRNO_INVALID_RESPONSE;
-    }
-
-    if (responselen != sizeof(RIL_StkCcUnsolSsResponse)) {
-        RLOGE("invalid response length %d, expected %d",
-               (int)responselen, (int)sizeof(RIL_StkCcUnsolSsResponse));
-        return RIL_ERRNO_INVALID_RESPONSE;
-    }
-
-    startResponse;
-    RIL_StkCcUnsolSsResponse *p_cur = (RIL_StkCcUnsolSsResponse *) response;
-    p.writeInt32(p_cur->serviceType);
-    p.writeInt32(p_cur->requestType);
-    p.writeInt32(p_cur->teleserviceType);
-    p.writeInt32(p_cur->serviceClass);
-    p.writeInt32(p_cur->result);
-
-    if (isServiceTypeCfQuery(p_cur->serviceType, p_cur->requestType)) {
-        RLOGD("responseSSData CF type, num of Cf elements %d", p_cur->cfData.numValidIndexes);
-        if (p_cur->cfData.numValidIndexes > NUM_SERVICE_CLASSES) {
-            RLOGE("numValidIndexes is greater than max value %d, "
-                  "truncating it to max value", NUM_SERVICE_CLASSES);
-            p_cur->cfData.numValidIndexes = NUM_SERVICE_CLASSES;
-        }
-        /* number of call info's */
-        p.writeInt32(p_cur->cfData.numValidIndexes);
-
-        for (int i = 0; i < p_cur->cfData.numValidIndexes; i++) {
-             RIL_CallForwardInfo cf = p_cur->cfData.cfInfo[i];
-
-             p.writeInt32(cf.status);
-             p.writeInt32(cf.reason);
-             p.writeInt32(cf.serviceClass);
-             p.writeInt32(cf.toa);
-             writeStringToParcel(p, cf.number);
-             p.writeInt32(cf.timeSeconds);
-             appendPrintBuf("%s[%s,reason=%d,cls=%d,toa=%d,%s,tout=%d],", printBuf,
-                 (cf.status==1)?"enable":"disable", cf.reason, cf.serviceClass, cf.toa,
-                  (char*)cf.number, cf.timeSeconds);
-             RLOGD("Data: %d,reason=%d,cls=%d,toa=%d,num=%s,tout=%d],", cf.status,
-                  cf.reason, cf.serviceClass, cf.toa, (char*)cf.number, cf.timeSeconds);
-        }
-    } else {
-        p.writeInt32 (SS_INFO_MAX);
-
-        /* each int*/
-        for (int i = 0; i < SS_INFO_MAX; i++) {
-             appendPrintBuf("%s%d,", printBuf, p_cur->ssInfo[i]);
-             RLOGD("Data: %d",p_cur->ssInfo[i]);
-             p.writeInt32(p_cur->ssInfo[i]);
-        }
-    }
-    removeLastChar;
-    closeResponse;
-
-    return 0;
-}
-
-static bool isServiceTypeCfQuery(RIL_SsServiceType serType, RIL_SsRequestType reqType) {
-    if ((reqType == SS_INTERROGATION) &&
-        (serType == SS_CFU ||
-         serType == SS_CF_BUSY ||
-         serType == SS_CF_NO_REPLY ||
-         serType == SS_CF_NOT_REACHABLE ||
-         serType == SS_CF_ALL ||
-         serType == SS_CF_ALL_CONDITIONAL)) {
-        return true;
-    }
-    return false;
-}
-
 static void triggerEvLoop() {
     int ret;
     if (!pthread_equal(pthread_self(), s_tid_dispatch)) {
@@ -3534,42 +3396,6 @@ static int responseDcRtInfo(Parcel &p, void *response, size_t responselen)
     appendPrintBuf("%s[time=%d,powerState=%d]", printBuf,
         pDcRtInfo->time,
         pDcRtInfo->powerState);
-    closeResponse;
-
-    return 0;
-}
-
-/* response is the count and the list of RIL_DataCallProfileInfo */
-static int responseGetDataCallProfile(Parcel &p, void *response, size_t responselen) {
-    int num = 0;
-
-    RLOGD("[OMH>]> %d", responselen);
-
-    if (response == NULL && responselen != 0) {
-        RLOGE("invalid response: NULL");
-        return RIL_ERRNO_INVALID_RESPONSE;
-    }
-
-    RLOGD("[OMH>]> processing response");
-
-    /* number of profile info's */
-    num = *((int *) response);
-    if (num > (responselen / sizeof(RIL_DataCallProfileInfo))) {
-        num = responselen / sizeof(RIL_DataCallProfileInfo);
-    }
-    p.writeInt32(num);
-
-    RIL_DataCallProfileInfo *p_cur = ((RIL_DataCallProfileInfo *) ((int *)response + 1));
-
-    startResponse;
-    for (int i = 0 ; i < num ; i++) {
-        p.writeInt32(p_cur->profileId);
-        p.writeInt32(p_cur->priority);
-        appendPrintBuf("%s[profileId=%d,priority=%d],", printBuf,
-                p_cur->profileId, p_cur->priority);
-        p_cur++;
-    }
-    removeLastChar;
     closeResponse;
 
     return 0;
@@ -4802,7 +4628,7 @@ requestToString(int request) {
         case RIL_REQUEST_ENTER_SIM_PUK2: return "ENTER_SIM_PUK2";
         case RIL_REQUEST_CHANGE_SIM_PIN: return "CHANGE_SIM_PIN";
         case RIL_REQUEST_CHANGE_SIM_PIN2: return "CHANGE_SIM_PIN2";
-        case RIL_REQUEST_ENTER_DEPERSONALIZATION_CODE: return "ENTER_DEPERSONALIZATION_CODE";
+        case RIL_REQUEST_ENTER_NETWORK_DEPERSONALIZATION: return "ENTER_NETWORK_DEPERSONALIZATION";
         case RIL_REQUEST_GET_CURRENT_CALLS: return "GET_CURRENT_CALLS";
         case RIL_REQUEST_DIAL: return "DIAL";
         case RIL_REQUEST_GET_IMSI: return "GET_IMSI";
@@ -4899,11 +4725,8 @@ requestToString(int request) {
         case RIL_REQUEST_ACKNOWLEDGE_INCOMING_GSM_SMS_WITH_PDU: return "RIL_REQUEST_ACKNOWLEDGE_INCOMING_GSM_SMS_WITH_PDU";
         case RIL_REQUEST_STK_SEND_ENVELOPE_WITH_STATUS: return "RIL_REQUEST_STK_SEND_ENVELOPE_WITH_STATUS";
         case RIL_REQUEST_VOICE_RADIO_TECH: return "VOICE_RADIO_TECH";
-        case RIL_REQUEST_WRITE_SMS_TO_SIM: return "WRITE_SMS_TO_SIM";
-#ifndef RIL_NO_CELL_INFO_LIST
         case RIL_REQUEST_GET_CELL_INFO_LIST: return"GET_CELL_INFO_LIST";
         case RIL_REQUEST_SET_UNSOL_CELL_INFO_LIST_RATE: return"SET_UNSOL_CELL_INFO_LIST_RATE";
-#endif
         case RIL_REQUEST_SET_INITIAL_ATTACH_APN: return "RIL_REQUEST_SET_INITIAL_ATTACH_APN";
         case RIL_REQUEST_IMS_REGISTRATION_STATE: return "IMS_REGISTRATION_STATE";
         case RIL_REQUEST_IMS_SEND_SMS: return "IMS_SEND_SMS";
@@ -4911,7 +4734,6 @@ requestToString(int request) {
         case RIL_REQUEST_SIM_OPEN_CHANNEL: return "SIM_OPEN_CHANNEL";
         case RIL_REQUEST_SIM_CLOSE_CHANNEL: return "SIM_CLOSE_CHANNEL";
         case RIL_REQUEST_SIM_TRANSMIT_APDU_CHANNEL: return "SIM_TRANSMIT_APDU_CHANNEL";
-        case RIL_REQUEST_SIM_GET_ATR: return "SIM_GET_ATR";
         case RIL_REQUEST_SET_UICC_SUBSCRIPTION: return "SET_UICC_SUBSCRIPTION";
         case RIL_REQUEST_ALLOW_DATA: return "ALLOW_DATA";
         case RIL_REQUEST_GET_HARDWARE_CONFIG: return "GET_HARDWARE_CONFIG";
@@ -4919,7 +4741,6 @@ requestToString(int request) {
         case RIL_REQUEST_GET_DC_RT_INFO: return "GET_DC_RT_INFO";
         case RIL_REQUEST_SET_DC_RT_INFO_RATE: return "SET_DC_RT_INFO_RATE";
         case RIL_REQUEST_SET_DATA_PROFILE: return "SET_DATA_PROFILE";
-        case RIL_REQUEST_GET_DATA_CALL_PROFILE: return "GET_DATA_CALL_PROFILE";
         case RIL_UNSOL_RESPONSE_RADIO_STATE_CHANGED: return "UNSOL_RESPONSE_RADIO_STATE_CHANGED";
         case RIL_UNSOL_RESPONSE_CALL_STATE_CHANGED: return "UNSOL_RESPONSE_CALL_STATE_CHANGED";
         case RIL_UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED: return "UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED";
@@ -4930,7 +4751,6 @@ requestToString(int request) {
         case RIL_UNSOL_ON_USSD_REQUEST: return "UNSOL_ON_USSD_REQUEST(obsolete)";
         case RIL_UNSOL_NITZ_TIME_RECEIVED: return "UNSOL_NITZ_TIME_RECEIVED";
         case RIL_UNSOL_SIGNAL_STRENGTH: return "UNSOL_SIGNAL_STRENGTH";
-        case RIL_UNSOL_SUPP_SVC_NOTIFICATION: return "UNSOL_SUPP_SVC_NOTIFICATION";
         case RIL_UNSOL_STK_SESSION_END: return "UNSOL_STK_SESSION_END";
         case RIL_UNSOL_STK_PROACTIVE_COMMAND: return "UNSOL_STK_PROACTIVE_COMMAND";
         case RIL_UNSOL_STK_EVENT_NOTIFY: return "UNSOL_STK_EVENT_NOTIFY";
@@ -4956,9 +4776,7 @@ requestToString(int request) {
         case RIL_UNSOL_EXIT_EMERGENCY_CALLBACK_MODE: return "UNSOL_EXIT_EMERGENCY_CALLBACK_MODE";
         case RIL_UNSOL_RIL_CONNECTED: return "UNSOL_RIL_CONNECTED";
         case RIL_UNSOL_VOICE_RADIO_TECH_CHANGED: return "UNSOL_VOICE_RADIO_TECH_CHANGED";
-#ifndef RIL_NO_CELL_INFO_LIST
         case RIL_UNSOL_CELL_INFO_LIST: return "UNSOL_CELL_INFO_LIST";
-#endif
         case RIL_UNSOL_RESPONSE_IMS_NETWORK_STATE_CHANGED: return "RESPONSE_IMS_NETWORK_STATE_CHANGED";
         case RIL_UNSOL_UICC_SUBSCRIPTION_STATUS_CHANGED: return "UNSOL_UICC_SUBSCRIPTION_STATUS_CHANGED";
         case RIL_UNSOL_SRVCC_STATE_NOTIFY: return "UNSOL_SRVCC_STATE_NOTIFY";
