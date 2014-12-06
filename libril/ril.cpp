@@ -2176,14 +2176,35 @@ static int responseStrings(Parcel &p, void *response, size_t responselen, bool n
 #ifdef RIL_RESPONSE_5_ELEMENTS
             sCount++;
             // ignore the fifth string that is returned by newer QCOM libOEM_ril.so.
-            if (network_search == true && sCount % 5 == 0) {
-                ALOGE("The %dth string returned by network search is ignored : %s", i + 1, (char*)p_cur[i]);
-                sCount = 0;
-                continue;
-            }
-#endif
+            if (network_search == true)
+                if (sCount == 3) {
+                    ALOGV("Appending 5th network mode string to 3rd");
+                    appendPrintBuf("%s%s+%s,", printBuf, (char*)p_cur[i], (char*)p_cur[i + 2]);
+
+                    char buffer[16]; //MCCMNC+RAT
+                    int network_mode;
+                    network_mode = RADIO_TECH_UNKNOWN;
+                    if (strcmp(p_cur[i + 2], "gsm") == 0)
+                        network_mode = RADIO_TECH_GSM;
+                    else if (strcmp(p_cur[i + 2], "wcdma") == 0)
+                        network_mode = RADIO_TECH_UMTS;
+                    else if (strcmp(p_cur[i + 2], "lte") == 0)
+                        network_mode = RADIO_TECH_LTE;
+                    sprintf(buffer, "%s+%d", (char*)p_cur[i], network_mode);
+
+                    writeStringToParcel (p, buffer);
+                } else if (sCount == 5) {
+                    ALOGD("The %dth string returned by network search is ignored : %s", i + 1, (char*)p_cur[i]);
+                    sCount = 0;
+                    continue;
+                } else {
+                    appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
+                    writeStringToParcel (p, p_cur[i]);
+                }
+#else
             appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
             writeStringToParcel (p, p_cur[i]);
+#endif
         }
         removeLastChar;
         closeResponse;
