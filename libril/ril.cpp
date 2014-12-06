@@ -2176,7 +2176,7 @@ static int responseStrings(Parcel &p, void *response, size_t responselen, bool n
 #ifdef RIL_RESPONSE_5_ELEMENTS
             sCount++;
             // ignore the fifth string that is returned by newer QCOM libOEM_ril.so.
-            if (network_search == true)
+            if (network_search == true) {
                 if (sCount == 3) {
                     ALOGV("Appending 5th network mode string to 3rd");
                     appendPrintBuf("%s%s+%s,", printBuf, (char*)p_cur[i], (char*)p_cur[i + 2]);
@@ -2201,6 +2201,10 @@ static int responseStrings(Parcel &p, void *response, size_t responselen, bool n
                     appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
                     writeStringToParcel (p, p_cur[i]);
                 }
+            } else {
+                appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
+                writeStringToParcel (p, p_cur[i]);
+            }
 #else
             appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
             writeStringToParcel (p, p_cur[i]);
