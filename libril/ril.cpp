@@ -638,6 +638,7 @@ dispatchNetworkManual (Parcel& p, RequestInfo *pRI) {
     status_t status;
     size_t datalen;
     char **pStrings;
+    char *operatorNumericLoc;
 
     datalen = sizeof(char *) * 2;
 
@@ -645,6 +646,12 @@ dispatchNetworkManual (Parcel& p, RequestInfo *pRI) {
     pStrings = (char **)alloca(datalen);
 
     pStrings[0] = strdupReadString(p);
+
+    // Cut off RAT
+    operatorNumericLoc = strchr(pStrings[0], '+');
+    if (operatorNumericLoc != NULL)
+        *operatorNumericLoc = 0;
+
     appendPrintBuf("%s%s,", printBuf, pStrings[0]);
     pStrings[1] = strdup("NOCHANGE");
     closeRequest;
