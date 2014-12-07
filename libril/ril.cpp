@@ -647,7 +647,7 @@ dispatchNetworkManual (Parcel& p, RequestInfo *pRI) {
 
     pStrings[0] = strdupReadString(p);
 
-#ifdef RIL_RESPONSE_5_ELEMENTS
+#ifdef RIL_APPEND_RAT_TO_PLMN
     // Cut off RAT
     operatorNumericLoc = strchr(pStrings[0], '+');
     if (operatorNumericLoc != NULL)
@@ -2167,49 +2167,28 @@ static int responseStrings(Parcel &p, void *response, size_t responselen, bool n
         char **p_cur = (char **) response;
 
         numStrings = responselen / sizeof(char *);
-#ifdef RIL_RESPONSE_5_ELEMENTS
-        if (network_search == true) {
-            // we only want four entries for each network
-            p.writeInt32 (numStrings - (numStrings / 5));
-        } else {
-            p.writeInt32 (numStrings);
-        }
-        int sCount = 0;
-#else
         p.writeInt32 (numStrings);
-#endif
 
         /* each string*/
         startResponse;
         for (int i = 0 ; i < numStrings ; i++) {
-#ifdef RIL_RESPONSE_5_ELEMENTS
-            sCount++;
-            // ignore the fifth string that is returned by newer QCOM libOEM_ril.so.
-            if (network_search == true) {
-                if (sCount == 3) {
-                    ALOGV("Appending 5th network mode string to 3rd");
-                    appendPrintBuf("%s%s+%s,", printBuf, (char*)p_cur[i], (char*)p_cur[i + 2]);
+#ifdef RIL_APPEND_RAT_TO_PLMN
+            if (network_search == true && (i + 1) % 5 == 3) {
+                RLOGV("Appending 5th network mode string to 3rd");
 
-                    char buffer[16]; //MCCMNC+RAT
-                    int network_mode;
-                    network_mode = RADIO_TECH_UNKNOWN;
-                    if (strcmp(p_cur[i + 2], "gsm") == 0)
-                        network_mode = RADIO_TECH_GSM;
-                    else if (strcmp(p_cur[i + 2], "wcdma") == 0)
-                        network_mode = RADIO_TECH_UMTS;
-                    else if (strcmp(p_cur[i + 2], "lte") == 0)
-                        network_mode = RADIO_TECH_LTE;
-                    sprintf(buffer, "%s+%d", (char*)p_cur[i], network_mode);
+                char buffer[16]; //PLMN+RAT, shouldn't be longer than 16
+                int network_mode;
+                network_mode = RADIO_TECH_UNKNOWN;
+                if (strcmp(p_cur[i + 2], "gsm") == 0)
+                    network_mode = RADIO_TECH_GSM;
+                else if (strcmp(p_cur[i + 2], "wcdma") == 0)
+                    network_mode = RADIO_TECH_UMTS;
+                else if (strcmp(p_cur[i + 2], "lte") == 0)
+                    network_mode = RADIO_TECH_LTE;
+                sprintf(buffer, "%s+%d", (char*)p_cur[i], network_mode);
 
-                    writeStringToParcel (p, buffer);
-                } else if (sCount == 5) {
-                    ALOGD("The %dth string returned by network search is ignored : %s", i + 1, (char*)p_cur[i]);
-                    sCount = 0;
-                    continue;
-                } else {
-                    appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
-                    writeStringToParcel (p, p_cur[i]);
-                }
+                appendPrintBuf("%s%s,", printBuf, buffer);
+                writeStringToParcel (p, buffer);
             } else {
                 appendPrintBuf("%s%s,", printBuf, (char*)p_cur[i]);
                 writeStringToParcel (p, p_cur[i]);
