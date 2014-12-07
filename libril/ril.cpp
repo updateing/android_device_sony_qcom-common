@@ -647,10 +647,12 @@ dispatchNetworkManual (Parcel& p, RequestInfo *pRI) {
 
     pStrings[0] = strdupReadString(p);
 
+#ifdef RIL_RESPONSE_5_ELEMENTS
     // Cut off RAT
     operatorNumericLoc = strchr(pStrings[0], '+');
     if (operatorNumericLoc != NULL)
         *operatorNumericLoc = 0;
+#endif
 
     appendPrintBuf("%s%s,", printBuf, pStrings[0]);
     pStrings[1] = strdup("NOCHANGE");
