@@ -21,7 +21,6 @@
 *
 */
 
-
 //#define LOG_NDEBUG 0
 
 #define LOG_TAG "CameraWrapper"
@@ -38,6 +37,7 @@
 static char KEY_SONY_IMAGE_STABILISER_VALUES[] = "sony-is-values";
 static char KEY_SONY_IMAGE_STABILISER[] = "sony-is";
 static char KEY_SONY_VIDEO_STABILISER[] = "sony-vs";
+static char KEY_SONY_VIDEO_STABILISER_VALUES[] = "sony-vs-values";
 static char KEY_SONY_VIDEO_HDR[] = "sony-video-hdr";
 static char KEY_SONY_VIDEO_HDR_VALUES[] = "sony-video-hdr-values";
 static char KEY_SONY_ISO_AVAIL_MODES[] = "sony-iso-values";
@@ -54,6 +54,7 @@ static char VALUE_SONY_ON[] = "on";
 static char VALUE_SONY_OFF[] = "off";
 static char VALUE_SONY_STILL_HDR[] = "on-still-hdr";
 static char VALUE_SONY_AUTO_EXPOSURE_SPOT[] = "spot";
+static char VALUE_SONY_INTELLIGENT_ACTIVE[] = "on-intelligent-active";
 
 // QCOM parameter names
 static char KEY_ISO_MODE[] = "iso";
@@ -317,7 +318,11 @@ static char *camera_fixup_setparams(int id, const char *settings)
 
     if (params.get(android::CameraParameters::KEY_RECORDING_HINT)) {
         if (strcmp(params.get(android::CameraParameters::KEY_RECORDING_HINT), android::CameraParameters::TRUE) == 0) {
-            params.set(KEY_SONY_VIDEO_STABILISER, VALUE_SONY_ON);
+            if (params.get(KEY_SONY_VIDEO_STABILISER_VALUES) && (strstr(params.get(KEY_SONY_VIDEO_STABILISER_VALUES), VALUE_SONY_INTELLIGENT_ACTIVE) != NULL) ) {
+                params.set(KEY_SONY_VIDEO_STABILISER, VALUE_SONY_INTELLIGENT_ACTIVE);
+            } else {
+                params.set(KEY_SONY_VIDEO_STABILISER, VALUE_SONY_ON);
+            }
             params.set(KEY_SONY_IMAGE_STABILISER, VALUE_SONY_OFF);
         }
     }
